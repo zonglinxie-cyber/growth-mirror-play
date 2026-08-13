@@ -1,0 +1,13 @@
+{
+  "name": "成长镜",
+  "short_name": "成长镜",
+  "description": "交作业 → 家长批改 → 看反馈",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#fdf0d6",
+  "theme_color": "#fdf0d6",
+  "icons": [
+    { "src": "./assets/app-icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "./assets/app-icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}

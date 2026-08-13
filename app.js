@@ -173,22 +173,24 @@ function photoBlock(item, editable) {
     </div>`;
   }
   if (!editable) return "";
-  return `<label class="text-btn">加一张图（可选）
-    <input hidden type="file" accept="image/*" data-act="photo" data-id="${item.id}" />
+  return `<label class="file-btn">拍一张作业（可选）
+    <input hidden type="file" accept="image/*" capture="environment" data-act="photo" data-id="${item.id}" />
   </label>`;
 }
 
-function renderTop(subtitle) {
-  return `<header class="top">
-    <div class="brand">
-      <h1>成长镜</h1>
-      <div class="date">${esc(subtitle)}</div>
-    </div>
-    <div class="roles" role="tablist">
-      <button data-act="role" data-role="child" class="${state.role === "child" ? "on" : ""}">我是孩子</button>
-      <button data-act="role" data-role="parent" class="${state.role === "parent" ? "on" : ""}">我是家长</button>
-    </div>
-  </header>`;
+function companionLine() {
+  const status = packetStatus(today());
+  if (state.screen === "history") {
+    return "昨天还在。习惯靠重复，不靠勋章。";
+  }
+  if (state.role === "parent") {
+    if (status === "submitted") return "每条勾对、错或需订正。能写一句短评就写，不要讲题。";
+    if (status === "graded") return "今天批完了。短评孩子打开就能看见。";
+    return "孩子还没交过来。交过来之后，你勾对错、写一句短评就好。";
+  }
+  if (status === "submitted") return "已经交给家长了。批完你再回来，就能看见对错和那句话。";
+  if (status === "graded") return "家长看过了。需订正的可以勾完成；想改一点就写给明天的自己。";
+  return "先把今天要交的作业放到桌上。我只在旁边看着，批改是家长的事。";
 }
 
 function playBar() {
@@ -199,157 +201,161 @@ function playBar() {
   </div>`;
 }
 
+function frame(subtitle, panel) {
+  return `<div class="shell">
+    <header class="top">
+      <div class="brand">
+        <img src="./assets/app-icon-192.png" alt="" width="44" height="44" />
+        <div>
+          <h1>成长镜</h1>
+          <p>${esc(subtitle)}</p>
+        </div>
+      </div>
+      <div class="top-actions">
+        <span class="pill">${state.role === "parent" ? "家长在批改" : "先交清楚，再看反馈"}</span>
+        <button class="pill ${state.role === "child" ? "on" : ""}" data-act="role" data-role="child">我是孩子</button>
+        <button class="pill ${state.role === "parent" ? "on" : ""}" data-act="role" data-role="parent">我是家长</button>
+      </div>
+    </header>
+    <div class="board">
+      <aside class="companion">
+        <img src="./assets/companion.png" alt="阿问" />
+        <div class="speech">
+          <div class="who"><b>阿问</b><span>在旁边看着</span></div>
+          <p>${esc(companionLine())}</p>
+        </div>
+      </aside>
+      <section class="panel">${panel}</section>
+    </div>
+  </div>`;
+}
+
+function itemList(day, mode) {
+  return day.items.map((item, i) => {
+    if (mode === "edit") {
+      return `<div class="item">
+        <div class="item-head">
+          <span class="index">第 ${i + 1} 条</span>
+          ${day.items.length > 1 ? `<button class="kill" data-act="remove" data-id="${item.id}">删除</button>` : ""}
+        </div>
+        <input class="title" maxlength="${MAX_TITLE}" data-field="title" data-id="${item.id}" placeholder="例如：数学练习册 P12" value="${esc(item.title)}" />
+        ${photoBlock(item, true)}
+      </div>`;
+    }
+    const g = item.grade ? GRADE[item.grade] : null;
+    return `<div class="item">
+      <div class="item-head">
+        <span class="index">第 ${i + 1} 条</span>
+        ${g ? `<span class="chip ${g.cls}">${g.label}</span>` : ""}
+      </div>
+      <p class="locked">${esc(item.title || "（未写完）")}</p>
+      ${item.comment ? `<p class="quote">「${esc(item.comment)}」</p>` : ""}
+      ${item.revised ? `<p class="quote">孩子已勾订正完成。</p>` : ""}
+      ${photoBlock(item, false)}
+      ${mode === "grade" ? `
+        <div class="grades">
+          <button data-act="grade" data-id="${item.id}" data-grade="ok" class="${item.grade === "ok" ? "on-ok" : ""}">对</button>
+          <button data-act="grade" data-id="${item.id}" data-grade="wrong" class="${item.grade === "wrong" ? "on-wrong" : ""}">错</button>
+          <button data-act="grade" data-id="${item.id}" data-grade="revise" class="${item.grade === "revise" ? "on-revise" : ""}">需订正</button>
+        </div>
+        <textarea class="comment" maxlength="${MAX_COMMENT}" data-field="comment" data-id="${item.id}" placeholder="一句短评，孩子会看见">${esc(item.comment)}</textarea>
+        <p class="counter">${(item.comment || "").length}/${MAX_COMMENT}</p>` : ""}
+      ${mode === "result" && item.grade === "revise" ? `<button class="secondary" data-act="revised" data-id="${item.id}">${item.revised ? "已订正" : "订正完成"}</button>` : ""}
+    </div>`;
+  }).join("");
+}
+
 function renderChildHome() {
-  const key = todayKey();
   const day = today();
   const status = packetStatus(day);
-  const dateLabel = labelFromKey(key);
+  const dateLabel = labelFromKey(todayKey());
 
   if (status === "submitted") {
-    return `${renderTop(dateLabel)}
-      <main class="main">
-        <div class="banner wait">
-          <h2>已经交给家长</h2>
-          <p>批完再打开，就能看见对错和那句短评。</p>
-        </div>
-        <section class="card">${day.items.map((item, i) => `
-          <div class="item">
-            <div class="item-head"><span class="index">第 ${i + 1} 条</span></div>
-            <p class="locked">${esc(item.title)}</p>
-            ${photoBlock(item, false)}
-          </div>`).join("")}</section>
-        ${playBar()}
-      </main>`;
+    return frame(dateLabel, `
+      <p class="eyebrow">已经交出去</p>
+      <h2>等家长批改</h2>
+      <p class="lede">批完再打开，就能看见对错和那句短评。</p>
+      ${itemList(day, "read")}
+      ${playBar()}`);
   }
 
   if (status === "graded") {
-    return `${renderTop(dateLabel)}
-      <main class="main">
-        <div class="banner done">
-          <h2>家长看过了</h2>
-          <p>对错和短评都在下面。需订正的可以勾完成；想改习惯就写给明天的自己。</p>
-        </div>
-        <section class="card">${day.items.map((item, i) => {
-          const g = GRADE[item.grade] || GRADE.ok;
-          return `<div class="item">
-            <div class="item-head">
-              <span class="index">第 ${i + 1} 条</span>
-              <span class="chip ${g.cls}">${g.label}</span>
-            </div>
-            <p class="locked">${esc(item.title)}</p>
-            ${item.comment ? `<p class="quote">「${esc(item.comment)}」</p>` : `<p class="quote">家长这题没写短评。</p>`}
-            ${photoBlock(item, false)}
-            ${item.grade === "revise" ? `<button class="secondary" data-act="revised" data-id="${item.id}">${item.revised ? "已订正" : "订正完成"}</button>` : ""}
-          </div>`;
-        }).join("")}</section>
-        <section class="card">
-          <div class="item-head"><span class="index">明天改一点（选填）</span></div>
-          <textarea class="note" maxlength="${MAX_NOTE}" data-field="tomorrow" placeholder="例如：计算题先验算一遍">${esc(day.tomorrowNote)}</textarea>
-          <p class="counter">${(day.tomorrowNote || "").length}/${MAX_NOTE}</p>
-        </section>
-        ${playBar()}
-      </main>`;
+    return frame(dateLabel, `
+      <p class="eyebrow">家长看过了</p>
+      <h2>对错和那句话</h2>
+      <p class="lede">需订正的可以勾完成。想改习惯，就写给明天的自己。</p>
+      ${itemList(day, "result")}
+      <div class="item">
+        <span class="index">明天改一点（选填）</span>
+        <textarea class="note" maxlength="${MAX_NOTE}" data-field="tomorrow" placeholder="例如：计算题先验算一遍">${esc(day.tomorrowNote)}</textarea>
+        <p class="counter">${(day.tomorrowNote || "").length}/${MAX_NOTE}</p>
+      </div>
+      ${playBar()}`);
   }
 
   if (!day.items.length) day.items.push(newItem());
-
-  return `${renderTop(dateLabel)}
-    <main class="main">
-      <p class="lede">把今天要交的作业写清楚，最多 ${MAX_ITEMS} 条。交出去之后就不能改，等家长批。</p>
-      <section class="card">${day.items.map((item, i) => `
-        <div class="item">
-          <div class="item-head">
-            <span class="index">第 ${i + 1} 条</span>
-            ${day.items.length > 1 ? `<button class="kill" data-act="remove" data-id="${item.id}">删除</button>` : ""}
-          </div>
-          <input class="title" maxlength="${MAX_TITLE}" data-field="title" data-id="${item.id}" placeholder="例如：数学练习册 P12" value="${esc(item.title)}" />
-          ${photoBlock(item, true)}
-        </div>`).join("")}</section>
-      ${playBar()}
-    </main>
-    <div class="dock">
+  return frame(dateLabel, `
+    <p class="eyebrow">先看清，再交给家长</p>
+    <h2>把今天的作业放到桌上</h2>
+    <p class="lede">拍老师写的作业、作业本，或写下要交的条目。最多 ${MAX_ITEMS} 条。交出去就不能改。</p>
+    ${itemList(day, "edit")}
+    <p class="hint">任务是边界；什么时候开始、先做哪一条，由孩子自己决定。</p>
+    <div class="actions">
       ${day.items.length < MAX_ITEMS ? `<button class="secondary" data-act="add">再加一条</button>` : ""}
       <button class="primary" data-act="submit" ${canSubmit(day) ? "" : "disabled"}>交给家长</button>
-    </div>`;
+    </div>
+    ${playBar()}`);
 }
 
 function renderParentHome() {
-  const key = todayKey();
   const day = today();
   const status = packetStatus(day);
-  const dateLabel = labelFromKey(key);
+  const dateLabel = labelFromKey(todayKey());
 
   if (status === "empty" || status === "draft") {
-    return `${renderTop(dateLabel)}
-      <main class="main">
-        <div class="banner wait">
-          <h2>还没有交过来</h2>
-          <p>孩子点「交给家长」之后，才会出现在这里。</p>
-        </div>
-        ${playBar()}
-      </main>`;
+    return frame(dateLabel, `
+      <p class="eyebrow">还没交过来</p>
+      <h2>桌上还是空的</h2>
+      <p class="lede">孩子点「交给家长」之后，作业才会出现在这里。</p>
+      ${playBar()}`);
   }
 
   if (status === "graded") {
-    return `${renderTop(dateLabel)}
-      <main class="main">
-        <div class="banner done">
-          <h2>今天已批完</h2>
-          <p>短评孩子打开就能看见。要改结果，等明天的新作业。</p>
-        </div>
-        <section class="card">${day.items.map((item, i) => {
-          const g = GRADE[item.grade] || GRADE.ok;
-          return `<div class="item">
-            <div class="item-head"><span class="index">第 ${i + 1} 条</span><span class="chip ${g.cls}">${g.label}</span></div>
-            <p class="locked">${esc(item.title)}</p>
-            ${item.comment ? `<p class="quote">「${esc(item.comment)}」</p>` : ""}
-            ${item.revised ? `<p class="quote">孩子已勾订正完成。</p>` : ""}
-            ${photoBlock(item, false)}
-          </div>`;
-        }).join("")}</section>
-        ${day.tomorrowNote ? `<section class="card"><p class="quote">孩子写给明天：${esc(day.tomorrowNote)}</p></section>` : ""}
-        ${playBar()}
-      </main>`;
+    return frame(dateLabel, `
+      <p class="eyebrow">今天已批完</p>
+      <h2>短评孩子能看见</h2>
+      <p class="lede">要改结果，等明天的新作业。</p>
+      ${itemList(day, "read")}
+      ${day.tomorrowNote ? `<p class="quote">孩子写给明天：${esc(day.tomorrowNote)}</p>` : ""}
+      ${playBar()}`);
   }
 
-  return `${renderTop(dateLabel)}
-    <main class="main">
-      <p class="lede">每条勾对、错或需订正，能写一句短评就写。不要评分，不要讲题。</p>
-      <section class="card">${day.items.map((item, i) => `
-        <div class="item">
-          <div class="item-head"><span class="index">第 ${i + 1} 条</span></div>
-          <p class="locked">${esc(item.title)}</p>
-          ${photoBlock(item, false)}
-          <div class="grades">
-            <button data-act="grade" data-id="${item.id}" data-grade="ok" class="${item.grade === "ok" ? "on-ok" : ""}">对</button>
-            <button data-act="grade" data-id="${item.id}" data-grade="wrong" class="${item.grade === "wrong" ? "on-wrong" : ""}">错</button>
-            <button data-act="grade" data-id="${item.id}" data-grade="revise" class="${item.grade === "revise" ? "on-revise" : ""}">需订正</button>
-          </div>
-          <textarea class="comment" maxlength="${MAX_COMMENT}" data-field="comment" data-id="${item.id}" placeholder="一句短评，孩子会看见">${esc(item.comment)}</textarea>
-          <p class="counter">${(item.comment || "").length}/${MAX_COMMENT}</p>
-        </div>`).join("")}</section>
-      ${playBar()}
-    </main>
-    <div class="dock">
+  return frame(dateLabel, `
+    <p class="eyebrow">待批改</p>
+    <h2>勾对错，写一句</h2>
+    <p class="lede">不要评分，不要讲题。孩子打开就能看见你写的那句。</p>
+    ${itemList(day, "grade")}
+    <div class="actions">
       <button class="primary" data-act="finish-grade" ${allGraded(day) ? "" : "disabled"}>完成批改</button>
-    </div>`;
+    </div>
+    ${playBar()}`);
 }
 
 function renderHistory() {
   const keys = historyKeys();
-  return `${renderTop("近 7 日")}
-    <main class="main">
-      <p class="lede">昨天还在。习惯靠重复，不靠勋章。</p>
-      <section class="card">${keys.map((key) => {
-        const day = state.days[key] || emptyDay();
-        const isToday = key === todayKey();
-        return `<button class="list-row" data-act="open-day" data-key="${key}">
-          <span>${labelFromKey(key)}${isToday ? " · 今天" : ""}</span>
-          ${statusChip(day)}
-        </button>`;
-      }).join("")}</section>
-      ${playBar()}
-    </main>`;
+  return frame("近 7 日", `
+    <p class="eyebrow">回看</p>
+    <h2>这几天还在</h2>
+    <p class="lede">昨天还在。习惯靠重复，不靠勋章。</p>
+    ${keys.map((key) => {
+      const day = state.days[key] || emptyDay();
+      const isToday = key === todayKey();
+      return `<button class="list-row" data-act="open-day" data-key="${key}">
+        <span>${labelFromKey(key)}${isToday ? " · 今天" : ""}</span>
+        ${statusChip(day)}
+      </button>`;
+    }).join("")}
+    ${playBar()}`);
 }
 
 function render() {
@@ -515,25 +521,15 @@ app.addEventListener("input", (event) => {
 function peekDay(key) {
   const day = state.days[key] || emptyDay();
   const status = packetStatus(day);
-  app.innerHTML = `${renderTop(labelFromKey(key))}
-    <main class="main">
-      <p class="lede">${status === "empty" ? "那天没有交作业。" : "这是已经发生过的一天，只能看。"}</p>
-      ${status === "empty" ? "" : `<section class="card">${day.items.map((item, i) => {
-        const g = item.grade ? GRADE[item.grade] : null;
-        return `<div class="item">
-          <div class="item-head">
-            <span class="index">第 ${i + 1} 条</span>
-            ${g ? `<span class="chip ${g.cls}">${g.label}</span>` : statusChip(day)}
-          </div>
-          <p class="locked">${esc(item.title || "（未写完）")}</p>
-          ${item.comment ? `<p class="quote">「${esc(item.comment)}」</p>` : ""}
-          ${item.revised ? `<p class="quote">订正完成</p>` : ""}
-          ${photoBlock(item, false)}
-        </div>`;
-      }).join("")}</section>`}
-      ${day.tomorrowNote ? `<section class="card"><p class="quote">明天改一点：${esc(day.tomorrowNote)}</p></section>` : ""}
+  app.innerHTML = frame(labelFromKey(key), `
+    <p class="eyebrow">回看</p>
+    <h2>${status === "empty" ? "那天没有交作业" : "已经发生过的一天"}</h2>
+    <p class="lede">${status === "empty" ? "没有记录。" : "只能看，不能改。"}</p>
+    ${status === "empty" ? "" : itemList(day, "read")}
+    ${day.tomorrowNote ? `<p class="quote">明天改一点：${esc(day.tomorrowNote)}</p>` : ""}
+    <div class="actions">
       <button class="secondary" data-act="close-peek">返回近 7 日</button>
-    </main>`;
+    </div>`);
 }
 
 render();

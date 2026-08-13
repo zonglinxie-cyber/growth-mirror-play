@@ -4,4 +4,4 @@
 
 打开：https://zonglinxie-cyber.github.io/growth-mirror-play/
 
-数据只存在当前浏览器，无账号。这是前期试玩页，不是 iPad App。
+视觉来自本地完整工程（图标、阿问、学习实验室配色）。数据只存在当前浏览器。
